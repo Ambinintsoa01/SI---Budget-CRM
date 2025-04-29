@@ -2,25 +2,22 @@
 session_start();
 require_once '../models/Auth.php';
 require_once '../models/Budget.php';
+require_once '../models/Product.php';
+require_once '../models/crm.php';
 
+$crm = new crm();
 $auth = new Auth();
+$product = new Product();
 $budgetModel = new Budget();
+
+// $categories = $product->getAllCatrgories();
+// $products = $product->getAllProduct();
+$actions = $crm->getAllActions();
+$currentDepartment = $auth->getCurrentDepartment();
 
 if (!$auth->isLoggedIn()) {
     header('Location: login.php');
     exit();
-}
-
-$currentDepartment = $auth->getCurrentDepartment();
-
-// Voir une réalisation existante (si nécessaire)
-$viewMode = isset($_GET['view']);
-$budgetDetails = null;
-$budgetId = null;
-
-if ($viewMode) {
-    $budgetId = $_GET['view'];
-    $budgetDetails = $budgetModel->getBudgetDetails($budgetId);
 }
 
 $periods = $budgetModel->getPeriods();
@@ -56,11 +53,11 @@ $periods = $budgetModel->getPeriods();
                 </a>
             <?php endif; ?>
             <?php if ($auth->isMarkNComm()): ?>
-                <a href="home.php" class="btn">
-                    <i class="fas fa-bullhorn"></i> Marketing&Comm
-                </a>
                 <a href="graph.php" class="btn">
                     <i class="fas fa-chart-bar"></i> Graphe&Stat
+                </a>
+                <a href="products.php" class="btn">
+                    <i class="fas fa-pizza-slice"></i> Products
                 </a>
             <?php endif; ?>
             <a href="../controllers/authController.php?logout=1" class="btn btn-error">
@@ -86,105 +83,68 @@ $periods = $budgetModel->getPeriods();
         <?php endif; ?>
 
         <main>
-            <?php if ($viewMode && $budgetDetails): ?>
-                <h2>Détails du Budget</h2>
-                <h3>Prévisions</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Catégorie</th>
-                            <th>Type</th>
-                            <th>Montant (€)</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($budgetDetails['forecasts'] as $forecast): ?>
-                            <tr>
-                                <td><?= htmlspecialchars($forecast['category']) ?></td>
-                                <td><?= htmlspecialchars($forecast['type']) ?></td>
-                                <td><?= number_format($forecast['amount'], 2, ',', ' ') ?> €</td>
-                                <td><?= htmlspecialchars($forecast['description'] ?? '-') ?></td>
-                            </tr>
+            <form action="../controllers/budgetController.php" method="post">
+                <div class="form-group">
+                    <label for="period_id">Période</label>
+                    <select name="period_id" id="period_id" required>
+                        <option value="">Sélectionnez une période</option>
+                        <?php foreach ($periods as $period): ?>
+                            <option value="<?= $period['id'] ?>">
+                                <?= htmlspecialchars($period['name']) ?> (<?= date('d/m/Y', strtotime($period['start_date'])) ?> - <?= date('d/m/Y', strtotime($period['end_date'])) ?>)
+                            </option>
                         <?php endforeach; ?>
-                    </tbody>
-                </table>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="date">Date</label>
+                    <input type="date" id="date" name="date" required>
+                </div>
 
-                <h3>Réalisations</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Catégorie</th>
-                            <th>Type</th>
-                            <th>Montant (€)</th>
-                            <th>Date</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($budgetDetails['realizations'] as $realization): ?>
-                            <tr>
-                                <td><?= htmlspecialchars($realization['category']) ?></td>
-                                <td><?= htmlspecialchars($realization['type']) ?></td>
-                                <td><?= number_format($realization['amount'], 2, ',', ' ') ?> €</td>
-                                <td><?= date('d/m/Y', strtotime($realization['date'])) ?></td>
-                                <td><?= htmlspecialchars($realization['description'] ?? '-') ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            <?php else: ?>
-                <form action="../controllers/budgetController.php" method="post">
+                <?php if ($auth->isMarkNComm()) { ?>
                     <div class="form-group">
-                        <label for="period_id">Période</label>
-                        <select name="period_id" id="period_id" required>
-                            <option value="">Sélectionnez une période</option>
-                            <?php foreach ($periods as $period): ?>
-                                <option value="<?= $period['id'] ?>">
-                                    <?= htmlspecialchars($period['name']) ?> (<?= date('d/m/Y', strtotime($period['start_date'])) ?> - <?= date('d/m/Y', strtotime($period['end_date'])) ?>)
-                                </option>
-                            <?php endforeach; ?>
+                        <label for="action_id">Action</label>
+                        <select name="action_id" required>
+                            <option value="">Selectionner l'action a repondre</option>
+                            <?php foreach ($actions as $act) { ?>
+                                <option value="<?= $act['id'] ?>"><?= $act['name'] ?>: <?= $act['description'] ?></option>
+                            <?php } ?>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label for="date">Date</label>
-                        <input type="date" id="date" name="date" required>
-                    </div>
+                <?php } ?>
 
-                    <h2>Réalisations Budgétaires</h2>
-                    <div id="forecasts-container">
-                        <div class="forecast-item">
-                            <div class="form-group">
-                                <label for="category-0">Catégorie</label>
-                                <select name="categories[0][category]" id="category-0" class="category-select" required>
-                                    <option value="">Sélectionnez une catégorie</option>
-                                    <option value="Recette">Recette</option>
-                                    <option value="Dépense">Dépense</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="type-0">Type</label>
-                                <select name="categories[0][type]" id="type-0" class="type-select" required>
-                                    <option value="">Sélectionnez un type</option>
-                                </select>
-                                <input type="hidden" name="categories[0][budget_id]" id="budget_id-0" class="budget_id-hidden">
-                            </div>
-                            <div class="form-group">
-                                <label for="amount-0">Montant (€)</label>
-                                <input type="number" step="0.01" name="categories[0][amount]" id="amount-0" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="description-0">Description (facultatif)</label>
-                                <textarea name="categories[0][description]" id="description-0"></textarea>
-                            </div>
-                            <button type="button" class="btn btn-error remove-forecast">Supprimer</button>
+                <h2>Réalisations Budgétaires</h2>
+                <div id="forecasts-container">
+                    <div class="forecast-item">
+                        <div class="form-group">
+                            <label for="category-0">Catégorie</label>
+                            <select name="categories[0][category]" id="category-0" class="category-select" required>
+                                <option value="">Sélectionnez une catégorie</option>
+                                <option value="Recette">Recette</option>
+                                <option value="Dépense">Dépense</option>
+                            </select>
                         </div>
+                        <div class="form-group">
+                            <label for="type-0">Type</label>
+                            <select name="categories[0][type]" id="type-0" class="type-select" required>
+                                <option value="">Sélectionnez un type</option>
+                            </select>
+                            <input type="hidden" name="categories[0][budget_id]" id="budget_id-0" class="budget_id-hidden">
+                        </div>
+                        <div class="form-group">
+                            <label for="amount-0">Montant (€)</label>
+                            <input type="number" step="0.01" name="categories[0][amount]" id="amount-0" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="description-0">Description (facultatif)</label>
+                            <textarea name="categories[0][description]" id="description-0"></textarea>
+                        </div>
+                        <button type="button" class="btn btn-error remove-forecast">Supprimer</button>
                     </div>
+                </div>
 
-                    <button type="button" id="add-forecast" class="btn">Ajouter une Réalisation</button>
-                    <button type="submit" name="add_realisation" class="btn btn-primary">Soumettre</button>
-                </form>
-            <?php endif; ?>
+                <button type="button" id="add-forecast" class="btn">Ajouter une Réalisation</button>
+                <button type="submit" name="add_realisation" class="btn btn-primary">Soumettre</button>
+            </form>
         </main>
     </div>
 

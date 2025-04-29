@@ -1,13 +1,22 @@
 <?php
 session_start();
 require_once '../models/Auth.php';
-require_once '../models/Budget.php';
+require_once '../models/Product.php';
 
 $auth = new Auth();
-$budget = new Budget();
+$product = new Product();
 
 $currentDepartment = $auth->getCurrentDepartment();
-$summaryData = $budget->prepareSummaryData($auth->isFinance() ? null : $currentDepartment['id']);
+
+$products = $product->getProductsWithDetails();
+
+// Regrouper les produits par catégorie
+$grouped = [];
+foreach ($products as $product) {
+    $grouped[$product['category_name']][] = $product;
+}
+
+
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -36,11 +45,11 @@ $summaryData = $budget->prepareSummaryData($auth->isFinance() ? null : $currentD
             <a href="realisation.php" class="btn">
                 <i class="fas fa-money-bill-wave"></i> Ajouter une Réalisation
             </a>
-            <a href="marketing.php" class="btn">
-                <i class="fas fa-bullhorn"></i> Marketing&Comm
-            </a>
             <a href="graph.php" class="btn">
                 <i class="fas fa-chart-bar"></i> Graphe&Stat
+            </a>
+            <a href="products.php" class="btn">
+                <i class="fas fa-pizza-slice"></i> Products
             </a>
             <a href="../controllers/authController.php?logout=1" class="btn btn-error">
                 <i class="fas fa-sign-out-alt"></i> Déconnexion
@@ -50,7 +59,7 @@ $summaryData = $budget->prepareSummaryData($auth->isFinance() ? null : $currentD
 
     <div class="main-content">
         <header>
-            <h1>Action & reaction - <?= htmlspecialchars($currentDepartment['name']) ?></h1>
+            <h1>Liste des produits</h1>
         </header><br>
 
         <?php if (isset($_SESSION['success'])): ?>
@@ -62,7 +71,37 @@ $summaryData = $budget->prepareSummaryData($auth->isFinance() ? null : $currentD
             <div class="alert alert-error"><?= htmlspecialchars($_SESSION['error']);
                                             unset($_SESSION['error']); ?></div>
         <?php endif; ?>
+
+        <?php foreach ($grouped as $categoryName => $productList): ?>
+            <div class="category-section">
+                <h2><?= htmlspecialchars($categoryName) ?></h2>
+                <div class="scroll-container">
+                    <?php foreach ($productList as $product): ?>
+                        <div class="product-card">
+                            <strong><?= htmlspecialchars($product['product_name']) ?></strong><br>
+                            <div class="ventes">Ventes totales : <?= (int)$product['total_ventes'] ?></div>
+                            <div class="ventes">Stock restant : <?= (int)$product['total_stock'] ?></div>
+                            <span class="dropdown-toggle">▼</span>
+                            <div class="description">
+                                <?= nl2br(htmlspecialchars($product['action_descriptions'] ?? "Aucune remarque client.")) ?>
+                            </div>
+
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+
     </div>
+    <script>
+        // Toggle description on dropdown click
+        document.querySelectorAll('.dropdown-toggle').forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                const desc = toggle.nextElementSibling;
+                desc.style.display = desc.style.display === 'block' ? 'none' : 'block';
+            });
+        });
+    </script>
 </body>
 
 </html>

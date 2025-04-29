@@ -324,7 +324,7 @@ class Budget
             SELECT bf.type, bf.budget_id
             FROM budget_forecasts bf
             JOIN budgets b ON bf.budget_id = b.id
-            WHERE bf.category = ? AND bf.period_id = ? AND b.department_id = ?
+            WHERE bf.category = ? AND bf.period_id = ? AND b.department_id = ? AND b.status = 1
         ");
         $stmt->execute([$category, $periodId, $departmentId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);

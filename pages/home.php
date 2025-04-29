@@ -57,11 +57,11 @@ if (!isset($summaryData['data'])) {
                 </a>
             <?php endif; ?>
             <?php if ($auth->isMarkNComm()): ?>
-                <a href="marketing.php" class="btn">
-                    <i class="fas fa-bullhorn"></i> Marketing&Comm
-                </a>
                 <a href="graph.php" class="btn">
                     <i class="fas fa-chart-bar"></i> Graphe&Stat
+                </a>
+                <a href="products.php" class="btn">
+                    <i class="fas fa-pizza-slice"></i> Products
                 </a>
             <?php endif; ?>
             <button id="exportPdf" class="btn">

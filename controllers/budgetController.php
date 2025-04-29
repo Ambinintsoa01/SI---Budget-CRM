@@ -1,10 +1,12 @@
 <?php
 require_once '../models/Auth.php';
+require_once '../models/crm.php';
 require_once '../models/Budget.php';
 require_once '../models/Department.php';
 
 session_start();
 
+$crm = new crm();
 $auth = new Auth();
 $budget = new Budget();
 $department = new Department();
@@ -44,6 +46,7 @@ if (isset($_POST['create_budget'])) {
 
     if ($budgetId !== false) {
         $success = true;
+
         foreach ($_POST['categories'] as $category) {
             if (!$budget->addForecast(
                 $budgetId,
@@ -53,22 +56,57 @@ if (isset($_POST['create_budget'])) {
                 $category['description'] ?? null,
                 $periodId
             )) {
+                $_SESSION['error'] = "Erreur lors de l'ajout d'une prévision budgétaire.";
                 $success = false;
                 break;
+            }
+        }
+
+        // CRM : Insertion des réactions marketing/communication
+        if ($success && $auth->isMarkNComm()) {
+            $action = $crm->getActionsById($_POST['action_id'] ?? null);
+
+            if ($action) {
+                foreach ($_POST['categories'] as $category) {
+                    $react_id = $crm->createReaction(
+                        $action['p_category_id'] ?? NULL,
+                        $action['product_id'] ?? NULL,
+                        $currentDepartment['id'],
+                        $category['type'],
+                        $action['date_action']
+                    );
+                }
+
+                if ($react_id !== false) {
+                    if (!$crm->createCRM($_POST['action_id'], $react_id)) {
+                        $_SESSION['error'] = "Erreur lors de la création de l'association CRM.";
+                        $success = false;
+                    }
+                } else {
+                    $_SESSION['error'] = "Erreur lors de la création de la réaction.";
+                    $success = false;
+                }
+            } else {
+                $_SESSION['error'] = "Action introuvable pour création de réaction.";
+                $success = false;
             }
         }
 
         if ($success) {
             $_SESSION['success'] = "Budget créé avec succès ! En attente de validation.";
         } else {
-            $_SESSION['error'] = "Erreur lors de l'ajout des prévisions.";
+            if (!isset($_SESSION['error'])) {
+                $_SESSION['error'] = "Erreur inattendue lors de la création du budget.";
+            }
         }
     } else {
-        $_SESSION['error'] = "Erreur lors de la création du budget.";
+        $_SESSION['error'] = "Erreur lors de la création du budget principal.";
     }
+
     header('Location: ../pages/budget.php');
     exit();
 }
+
 
 // Ajouter une réalisation
 if (isset($_POST['add_realisation'])) {

@@ -177,3 +177,64 @@ SELECT
         WHERE (bf.category IS NOT NULL OR br.category IS NOT NULL) 
             AND b.status = 1 AND d.id = 1 
             ORDER BY d.name, p.start_date, bf.category DESC, bf.type;
+
+DROP TABLE CRM;
+DROP TABLE comm_reactions;
+DROP TABLE customer_actions;
+
+SELECT 
+                p.id AS product_id,
+                p.name AS product_name,
+                pc.name AS category_name,
+                ca.description AS action_description,
+                COALESCE(SUM(v.nb_vente), 0) AS total_ventes
+            FROM products p
+            JOIN product_category pc ON p.category_id = pc.id
+            LEFT JOIN customer_actions ca ON ca.product_id = p.id
+            LEFT JOIN vente v ON v.product_id = p.id
+            GROUP BY p.id, p.name, pc.name, ca.description
+            ORDER BY p.id;
+
+SELECT ca.id, c.name, ca.description
+FROM customer_actions ca
+JOIN customers c
+ON c.id = ca.customer_id;
+
+SELECT p_category_id, product_id, description, date_action
+FROM customer_actions 
+WHERE id = 1;
+
+SELECT 
+    p.id AS product_id,
+    p.name AS product_name,
+    pc.name AS category_name,
+    GROUP_CONCAT(DISTINCT CONCAT(c.name, ': ', ca.description) SEPARATOR '\n') AS action_descriptions,
+    v.nb_vente AS total_ventes,
+    s.nb_produit AS total_stock
+FROM products p
+JOIN product_category pc ON p.category_id = pc.id
+LEFT JOIN customer_actions ca ON ca.product_id = p.id
+LEFT JOIN customers c ON ca.customer_id = c.id
+LEFT JOIN vente v ON v.product_id = p.id
+LEFT JOIN stock s ON s.product_id = p.id
+GROUP BY p.id, p.name, pc.name
+ORDER BY p.id;
+
+INSERT INTO comm_reactions 
+(p_category_id, product_id, department_id, phase, description, date_reaction) 
+VALUES (NULL, 1, 3, 3, 'Pub pizza 4 fromage', '2025-01-02');
+
+SELECT p_category_id, product_id, description, date_action
+FROM customer_actions 
+WHERE id = 1;
+
+SELECT ca.id, c.name, ca.description
+FROM customer_actions ca
+JOIN customers c
+ON c.id = ca.customer_id
+WHERE ca.p_category_id IS NULL
+ORDER BY ca.id;
+
+SELECT *
+FROM customer_actions
+WHERE id=1;
