@@ -35,7 +35,7 @@ class CRM
                     FROM customer_actions ca
                     JOIN customers c
                     ON c.id = ca.customer_id
-                    WHERE ca.p_category_id IS NULL
+                    WHERE ca.p_category_id IS NULL AND ca.phase = 0
                     ORDER BY ca.id";
             $stmt = $this->db->prepare($sql);
             $stmt->execute();
@@ -53,7 +53,7 @@ class CRM
                     FROM customer_actions ca
                     JOIN customers c
                     ON c.id = ca.customer_id
-                    WHERE ca.product_id IS NULL
+                    WHERE ca.p_category_id IS NULL AND ca.phase = 0
                     ORDER BY ca.id";
             $stmt = $this->db->prepare($sql);
             $stmt->execute();
@@ -75,6 +75,39 @@ class CRM
             return $stmt->fetch(PDO::FETCH_ASSOC) ?: false; // Retourne un tableau associatif ou false si aucune ligne
         } catch (PDOException $e) {
             error_log("Erreur lors de la récupération de l'action: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    public function updatePhase($id)
+    {
+        try {
+            // Valider l'ID
+            if (!is_numeric($id) || $id <= 0) {
+                error_log("Erreur lors de la mise à jour de la phase : ID invalide ($id)");
+                return false;
+            }
+
+            // Préparer la requête SQL
+            $sql = "
+                UPDATE customer_actions
+                SET phase = 2
+                WHERE id = ?
+            ";
+            $stmt = $this->db->prepare($sql);
+
+            // Exécuter la requête avec l'ID
+            $stmt->execute([$id]);
+
+            // Vérifier si une ligne a été affectée
+            if ($stmt->rowCount() === 0) {
+                error_log("Aucune action trouvée pour l'ID $id lors de la mise à jour de la phase");
+                return false;
+            }
+
+            return true;
+        } catch (PDOException $e) {
+            error_log("Erreur lors de la mise à jour de la phase pour l'ID $id : " . $e->getMessage());
             return false;
         }
     }

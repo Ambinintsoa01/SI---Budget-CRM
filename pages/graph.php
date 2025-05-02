@@ -3,9 +3,9 @@ session_start();
 require_once '../models/Auth.php';
 require_once '../models/Budget.php';
 require_once '../models/Product.php';
-require_once '../models/CRM.php'; // Supposons que getCRM est dans une classe CRM
+require_once '../models/CRM.php';
 
-$crm = new CRM(); 
+$crm = new CRM();
 $auth = new Auth();
 $budget = new Budget();
 $product = new Product();
@@ -13,20 +13,27 @@ $product = new Product();
 $currentDepartment = $auth->getCurrentDepartment();
 $summaryData = $budget->prepareSummaryData($auth->isFinance() ? null : $currentDepartment['id']);
 
-// Récupérer tous les produits
+// Récupérer tous les produits, les ventes et le stock
 $products = $product->getAllProduct();
+$sales = $product->getSalesByProduct();
+$stock = $product->getStockByProduct();
 
 // Récupérer tous les c_reaction_id et leurs données CRM
-$c_reaction_ids = $crm->getAllReactionIds(); // Nouvelle méthode à ajouter
+$c_reaction_ids = $crm->getAllReactionIds($currentDepartment['id']);
 $crm_data = [];
 foreach ($c_reaction_ids as $reaction) {
     $crm_data[] = $crm->getCRM($reaction['id']);
 }
+
+// Log pour débogage
+error_log("Products: " . print_r($products, true));
+error_log("Sales: " . print_r($sales, true));
+error_log("Stock: " . print_r($stock, true));
+error_log("CRM Data: " . print_r($crm_data, true));
 ?>
 
 <!DOCTYPE html>
 <html lang="fr">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -36,7 +43,6 @@ foreach ($c_reaction_ids as $reaction) {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 </head>
-
 <body>
     <aside class="sidebar">
         <h2 style="color: white;">Menu</h2>
@@ -68,13 +74,11 @@ foreach ($c_reaction_ids as $reaction) {
         </header><br>
 
         <?php if (isset($_SESSION['success'])): ?>
-            <div class="alert alert-success"><?= htmlspecialchars($_SESSION['success']);
-                                                unset($_SESSION['success']); ?></div>
+            <div class="alert alert-success"><?= htmlspecialchars($_SESSION['success']); unset($_SESSION['success']); ?></div>
         <?php endif; ?>
 
         <?php if (isset($_SESSION['error'])): ?>
-            <div class="alert alert-error"><?= htmlspecialchars($_SESSION['error']);
-                                            unset($_SESSION['error']); ?></div>
+            <div class="alert alert-error"><?= htmlspecialchars($_SESSION['error']); unset($_SESSION['error']); ?></div>
         <?php endif; ?>
 
         <main>
@@ -87,44 +91,60 @@ foreach ($c_reaction_ids as $reaction) {
     </div>
 
     <script>
-        // Données des produits et CRM passées depuis PHP
+        // Données passées depuis PHP
         const products = <?= json_encode($products) ?>;
+        const salesData = <?= json_encode($sales) ?>;
+        const stockData = <?= json_encode($stock) ?>;
         const crmData = <?= json_encode($crm_data) ?>;
 
-        // Simuler les ventes de base (avant CRM)
-        function simulateBaseSales() {
-            return products.map(product => ({
-                id: product.id,
-                name: product.name,
-                sales: Math.floor(Math.random() * 100) + 50 // Entre 50 et 150 ventes
-            }));
+        // Log pour débogage
+        // console.log('Products:', products);
+        // console.log('Sales:', salesData);
+        // console.log('Stock:', stockData);
+        // console.log('CRM Data:', crmData);
+
+        // Préparer les ventes de base (avant CRM)
+        function prepareBaseSales() {
+            return products.map(product => {
+                const sale = salesData.find(s => parseInt(s.id) === parseInt(product.id)) || { total_sales: 0 };
+                const stock = stockData.find(s => parseInt(s.id) === parseInt(product.id)) || { stock: 0 };
+                return {
+                    id: product.id,
+                    name: product.name,
+                    sales: sale.total_sales, // Limiter à stock et 100
+                };
+            });
         }
 
-        // Simuler les ventes après CRM avec boost
-        function simulateCrmSales(baseSales) {
-            const sales = [...baseSales]; // Cloner les ventes de base
+        // Préparer les ventes après CRM avec boost
+        function prepareCrmSales(baseSales) {
+            // Créer une copie profonde pour éviter de modifier baseSales
+            const sales = baseSales.map(sale => ({ ...sale }));
             const boostedProducts = new Set();
-            const boostedCategories = new Set();
 
-            // Collecter les product_id et p_category_id boostés par le CRM
+            // Collecter les product_id boostés par le CRM
             crmData.forEach(reactions => {
-                reactions.forEach(reaction => {
-                    if (reaction.product_id) {
-                        boostedProducts.add(parseInt(reaction.product_id));
-                    }
-                    if (reaction.p_category_id) {
-                        boostedCategories.add(parseInt(reaction.p_category_id));
-                    }
-                });
+                if (reactions && Array.isArray(reactions)) {
+                    reactions.forEach(reaction => {
+                        if (reaction.product_id) {
+                            boostedProducts.add(parseInt(reaction.product_id));
+                            // console.log('Boosted Product ID:', parseInt(reaction.product_id));
+                        }
+                    });
+                }
             });
 
             // Appliquer un boost aux produits concernés
             sales.forEach(sale => {
+                const stock = stockData.find(s => parseInt(s.id) === parseInt(sale.id)) || { stock: 0 };
                 if (boostedProducts.has(parseInt(sale.id))) {
-                    sale.sales = Math.floor(sale.sales * 1.5); // Boost de 50%
+                    const boostedSales = sale.sales * 2; // Boost x10
+                    sale.sales = boostedSales; // Limiter à stock et 100
+                    // console.log(`Boosted ${sale.name}: ${sale.sales} (from ${boostedSales})`);
                 }
             });
 
+            // console.log('CRM Sales:', sales);
             return sales;
         }
 
@@ -145,63 +165,93 @@ foreach ($c_reaction_ids as $reaction) {
             options: {
                 scales: {
                     y: {
-                        beginAtZero: true
+                        beginAtZero: true,
+                        max: 200, // Maximum 100
+                        ticks: {
+                            stepSize: 25, // Graduations à 0, 25, 50, 75, 100
+                            callback: function(value) {
+                                return value;
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Nombre de ventes'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Produits'
+                        }
                     }
                 }
             }
         });
 
-        // Données pour les deux graphiques
-        const baseSales = simulateBaseSales();
-        const crmSales = simulateCrmSales(baseSales);
+        // Vérifier si les données sont vides
+        if (!(products.length && salesData.length)) {
+            document.getElementById('salesChart').style.display = 'none';
+            document.querySelector('main').innerHTML += '<p>Aucune donnée de vente disponible.</p>';
+        } else {
+            // Données pour les deux graphiques
+            // console.log('Generating baseSales...');
+            const baseSales = prepareBaseSales();
+            // console.log('Base Sales:', baseSales);
+            // console.log('Generating crmSales...');
+            const crmSales = prepareCrmSales(baseSales);
+            // console.log('CRM Sales:', crmSales);
 
-        // Fonction pour mettre à jour le graphique
-        function updateChart(sales, title) {
-            chart.data.labels = sales.map(sale => sale.name);
-            chart.data.datasets[0].data = sales.map(sale => sale.sales);
-            chart.data.datasets[0].label = title;
-            chart.update();
-        }
+            // Vérifier si des produits sont boostés
+            if (crmData.every(reactions => !reactions || reactions.length === 0)) {
+                // console.warn('Aucun produit boosté par le CRM.');
+            }
 
-        // Gestion des boutons de pagination
-        document.getElementById('before-crm').addEventListener('click', () => {
+            // Fonction pour mettre à jour le graphique
+            function updateChart(sales, title) {
+                // console.log(`Updating chart with ${title}:`, sales);
+                chart.data.labels = sales.map(sale => sale.name);
+                chart.data.datasets[0].data = sales.map(sale => sale.sales);
+                chart.data.datasets[0].label = title;
+                chart.update();
+            }
+
+            // Gestion des boutons de pagination
+            document.getElementById('before-crm').addEventListener('click', () => {
+                updateChart(baseSales, 'Ventes avant CRM');
+                document.getElementById('before-crm').classList.add('active');
+                document.getElementById('after-crm').classList.remove('active');
+            });
+
+            document.getElementById('after-crm').addEventListener('click', () => {
+                updateChart(crmSales, 'Ventes après CRM');
+                document.getElementById('after-crm').classList.add('active');
+                document.getElementById('before-crm').classList.remove('active');
+            });
+
+            // Afficher le graphique "Avant CRM" par défaut
+            // console.log('Displaying default chart: Avant CRM');
             updateChart(baseSales, 'Ventes avant CRM');
             document.getElementById('before-crm').classList.add('active');
-            document.getElementById('after-crm').classList.remove('active');
-        });
-
-        document.getElementById('after-crm').addEventListener('click', () => {
-            updateChart(crmSales, 'Ventes après CRM');
-            document.getElementById('after-crm').classList.add('active');
-            document.getElementById('before-crm').classList.remove('active');
-        });
-
-        // Afficher le graphique "Avant CRM" par défaut
-        updateChart(baseSales, 'Ventes avant CRM');
-        document.getElementById('before-crm').classList.add('active');
+        }
     </script>
 
     <style>
         .pagination {
             margin-bottom: 20px;
         }
-
         .pagination .btn {
             margin-right: 10px;
             padding: 10px 20px;
             cursor: pointer;
         }
-
         .pagination .btn.active {
             background-color: #4CAF50;
             color: white;
         }
-
         #salesChart {
-            max-width: 800px;
+            max-width: 1800px;
             margin: 0 auto;
         }
     </style>
 </body>
-
 </html>

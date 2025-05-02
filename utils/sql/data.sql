@@ -120,34 +120,25 @@ INSERT INTO customer_actions (p_category_id, product_id, customer_id, phase, des
 (3, NULL, 2, 0, 'Le client ne savait pas qu’on proposait des paninis.', '2025-04-13');
 
 INSERT INTO stock (nb_produit, product_id) VALUES
-(4, 1),
-(7, 2),
-(5, 3),
-(6, 4),
-(4, 5),
-(8, 6),
-(3, 7),
-(5, 8),
-(4, 9),
-(7, 10);
+(40, 1),
+(70, 2),
+(50, 3),
+(60, 4),
+(40, 5),
+(80, 6),
+(30, 7),
+(50, 8),
+(40, 9),
+(70, 10);
 
 INSERT INTO vente (product_id, customer_id, nb_vente) VALUES
-(1, 1, 6),
-
-(2, 3, 3),
-
-(3, 5, 5),
-
-(4, 2, 4),
-
-(5, 4, 6),
-
-(6, 1, 2),
-
-(7, 3, 7),
-
-(8, 5, 5),
-
-(9, 2, 6),
-
-(10, 4, 3);
+(1, 1, 60),
+(2, 3, 30),
+(3, 5, 50),
+(4, 2, 40),
+(5, 4, 60),
+(6, 1, 20),
+(7, 3, 70),
+(8, 5, 50),
+(9, 2, 60),
+(10, 4, 30);

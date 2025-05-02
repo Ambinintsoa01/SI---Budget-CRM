@@ -23,6 +23,42 @@ class Product
         }
     }
 
+    public function getSalesByProduct()
+    {
+        try {
+            $sql = "
+                SELECT p.id, p.name, COALESCE(SUM(v.nb_vente), 0) as total_sales
+                FROM products p
+                LEFT JOIN vente v ON p.id = v.product_id
+                GROUP BY p.id, p.name
+            ";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Erreur lors de la récupération des ventes: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    public function getStockByProduct()
+    {
+        try {
+            $sql = "
+                SELECT p.id, p.name, COALESCE(s.nb_produit, 0) as stock
+                FROM products p
+                LEFT JOIN stock s ON p.id = s.product_id
+                GROUP BY p.id, p.name
+            ";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Erreur lors de la récupération du stock: " . $e->getMessage());
+            return [];
+        }
+    }
+
     public function getAllCatrgories()
     {
         try {

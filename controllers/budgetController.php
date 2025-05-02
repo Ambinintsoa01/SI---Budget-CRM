@@ -161,6 +161,14 @@ if (isset($_POST['add_realisation'])) {
         }
     }
 
+    if ($success && $auth->isMarkNComm()) {
+        if ($success && !$crm->updatePhase($_POST['action_id'])) {
+            $_SESSION['error'] = "Erreur lors de la mise à jour de la phase de l'action.";
+            $success = false;
+        }
+    }
+
+
     if ($success) {
         $_SESSION['success'] = "Réalisation ajoutée avec succès !";
     } else {

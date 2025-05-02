@@ -127,7 +127,8 @@ class Budget
                 b.initial_balance,
                 bf.amount as forecast_amount,
                 b.status,
-                b.id as budget_id
+                b.id as budget_id,
+                bf.type
             FROM budgets b
             INNER JOIN departments d ON b.department_id = d.id
             LEFT JOIN budget_forecasts bf ON b.id = bf.budget_id
@@ -138,7 +139,78 @@ class Budget
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public function checkRealizationExists($budgetId, $category, $type, $periodId) {
+    public function getRemainingBudgets($periodId, $departmentId, $excludeCategory)
+    {
+        try {
+            $sql = "
+                SELECT 
+                    b.id AS budget_id,
+                    bf.id AS forecast_id,
+                    bf.category,
+                    bf.amount - COALESCE(SUM(br.amount), 0) AS remaining_amount
+                FROM budgets b
+                INNER JOIN budget_forecasts bf ON b.id = bf.budget_id
+                LEFT JOIN budget_realizations br ON b.id = br.budget_id 
+                    AND bf.category = br.category 
+                    AND bf.type = br.type
+                WHERE 
+                    b.period_id = ? 
+                    AND b.department_id = ? 
+                    AND bf.category != ?
+                    AND b.status = 1 -- Budget validé
+                GROUP BY 
+                    b.id, 
+                    bf.id, 
+                    bf.category, 
+                    bf.amount
+                HAVING 
+                    remaining_amount > 0
+            ";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([$periodId, $departmentId, $excludeCategory]);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Erreur lors de la récupération des budgets restants: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    public function getRemainingAmount($budgetId, $category, $type) {
+        try {
+            $sql = "
+                SELECT 
+                    bf.amount - COALESCE(SUM(br.amount), 0) AS remaining_amount
+                FROM budget_forecasts bf
+                LEFT JOIN budget_realizations br ON bf.budget_id = br.budget_id 
+                    AND bf.category = br.category 
+                    AND bf.type = br.type
+                WHERE bf.budget_id = ? AND bf.category = ? AND bf.type = ?
+                GROUP BY bf.amount
+            ";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([$budgetId, $category, $type]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            return $result ? $result['remaining_amount'] : 0;
+        } catch (PDOException $e) {
+            error_log("Erreur lors du calcul du montant restant: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    public function updateBudgetAmount($budgetId, $amountToUse)
+    {
+        try {
+            $sql = "UPDATE budget_forecasts SET amount = amount - ? WHERE id = ?";
+            $stmt = $this->db->prepare($sql);
+            return $stmt->execute([$amountToUse, $budgetId]);
+        } catch (PDOException $e) {
+            error_log("Erreur lors de la mise à jour du budget: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    public function checkRealizationExists($budgetId, $category, $type, $periodId)
+    {
         try {
             $sql = "
                 SELECT COUNT(*) 
@@ -330,7 +402,8 @@ class Budget
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public function getPreviousPeriod($currentPeriodStartDate, $departmentId) {
+    public function getPreviousPeriod($currentPeriodStartDate, $departmentId)
+    {
         try {
             // Trouver la période avec la date de fin la plus proche avant la date de début actuelle
             $sql = "
@@ -354,103 +427,3 @@ class Budget
         }
     }
 }
-
-
-    // public function getBudgetsDetailsByPeriod($departmentId = null)
-    // {
-    //     $sql = "
-    //     SELECT 
-    //         p.id as period_id,
-    //         p.name as period_name,
-    //         d.id as department_id,
-    //         d.name as department_name,
-    //         b.id as budget_id,
-    //         b.initial_balance,
-    //         b.status,
-    //         bf.id as forecast_id,
-    //         bf.category,
-    //         bf.type,
-    //         bf.amount as forecast_amount,
-    //         bf.description as forecast_description,
-    //         br.id as realization_id,
-    //         br.amount as realization_amount,
-    //         br.date as realization_date,
-    //         br.description as realization_description
-    //     FROM budgets b
-    //     INNER JOIN departments d ON b.department_id = d.id
-    //     INNER JOIN periods p ON b.period_id = p.id
-    //     LEFT JOIN budget_forecasts bf ON b.id = bf.budget_id AND bf.period_id = p.id
-    //     LEFT JOIN budget_realizations br ON b.id = br.budget_id 
-    //         AND br.period_id = p.id 
-    //         AND br.category = bf.category 
-    //         AND br.type = bf.type
-    //     WHERE (bf.category IS NOT NULL OR br.category IS NOT NULL) 
-    //         AND b.status = 1
-    // ";
-
-    //     $params = [];
-    //     if ($departmentId) {
-    //         $sql .= " AND d.id = ? ";
-    //         $params = [$departmentId];
-    //     }
-
-    //     $sql .= " ORDER BY d.name, p.start_date, bf.category DESC, bf.type ASC";
-
-    //     $stmt = $this->db->prepare($sql);
-    //     $stmt->execute($params);
-    //     $rawData = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    //     $result = [
-    //         'periods' => [],
-    //         'departments' => [],
-    //         'categories' => [],
-    //         'data' => []
-    //     ];
-
-    //     foreach ($rawData as $row) {
-    //         $periodId = $row['period_id'];
-    //         $departmentId = $row['department_id'];
-    //         $category = $row['category'];
-
-    //         if (!isset($result['periods'][$periodId])) {
-    //             $result['periods'][$periodId] = [
-    //                 'id' => $periodId,
-    //                 'name' => $row['period_name']
-    //             ];
-    //         }
-
-    //         if (!isset($result['departments'][$departmentId])) {
-    //             $result['departments'][$departmentId] = [
-    //                 'id' => $departmentId,
-    //                 'name' => $row['department_name']
-    //             ];
-    //         }
-
-    //         if ($category && !isset($result['categories'][$category])) {
-    //             $result['categories'][$category] = $category;
-    //         }
-
-    //         if ($row['budget_id'] && $category) {
-    //             $result['data'][$departmentId][$periodId][$category] = [
-    //                 'forecast' => [
-    //                     'id' => $row['forecast_id'],
-    //                     'category' => $row['category'],
-    //                     'type' => $row['type'],
-    //                     'amount' => $row['forecast_amount'] ?? 0,
-    //                     'description' => $row['forecast_description']
-    //                 ],
-    //                 'realization' => [
-    //                     'id' => $row['realization_id'],
-    //                     'category' => $row['category'],
-    //                     'type' => $row['type'],
-    //                     'amount' => $row['realization_amount'] ?? 0,
-    //                     'date' => $row['realization_date'],
-    //                     'description' => $row['realization_description']
-    //                 ],
-    //                 'initial_balance' => $row['initial_balance'],
-    //                 'status' => $row['status']
-    //             ];
-    //         }
-    //     }
-    //     return $result;
-    // }

@@ -87,6 +87,7 @@ $budgets = $budget->getBudgetsWithDetails();
                 <thead>
                     <tr>
                         <th>Département</th>
+                        <th>Description</th>
                         <th>Catégorie</th>
                         <th>Solde Initial</th>
                         <th>Montant Prévu</th>
@@ -103,6 +104,7 @@ $budgets = $budget->getBudgetsWithDetails();
                         <?php foreach ($budgets as $budget): ?>
                             <tr>
                                 <td><?= htmlspecialchars($budget['department_name']) ?></td>
+                                <td><?= htmlspecialchars($budget['type']) ?></td>
                                 <td><?= htmlspecialchars($budget['category'] ?? 'N/A') ?></td>
                                 <td><?= number_format($budget['initial_balance'], 2, ',', ' ') ?> €</td>
                                 <td><?= $budget['forecast_amount'] ? number_format($budget['forecast_amount'], 2, ',', ' ') . ' €' : 'N/A' ?></td>

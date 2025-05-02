@@ -12,7 +12,8 @@ $budgetModel = new Budget();
 
 // $categories = $product->getAllCatrgories();
 // $products = $product->getAllProduct();
-$actions = $crm->getAllActions();
+$actionsProducts = $crm->getActionsForProducts();
+$actionsProductsCat = $crm->getActionsForProductsCategory();
 $currentDepartment = $auth->getCurrentDepartment();
 
 if (!$auth->isLoggedIn()) {
@@ -105,9 +106,16 @@ $periods = $budgetModel->getPeriods();
                         <label for="action_id">Action</label>
                         <select name="action_id" required>
                             <option value="">Selectionner l'action a repondre</option>
-                            <?php foreach ($actions as $act) { ?>
-                                <option value="<?= $act['id'] ?>"><?= $act['name'] ?>: <?= $act['description'] ?></option>
-                            <?php } ?>
+                            <optgroup label="Produits">
+                                <?php foreach ($actionsProducts as $act) { ?>
+                                    <option value="<?= $act['id'] ?>"><?= $act['name'] ?>: <?= $act['description'] ?></option>
+                                <?php } ?>
+                            </optgroup>
+                            <optgroup label="Categories">
+                                <?php foreach ($actionsProductsCat as $act) { ?>
+                                    <option value="<?= $act['id'] ?>"><?= $act['name'] ?>: <?= $act['description'] ?></option>
+                                <?php } ?>
+                            </optgroup>
                         </select>
                     </div>
                 <?php } ?>
