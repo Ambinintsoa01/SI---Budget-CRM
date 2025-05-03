@@ -274,3 +274,21 @@ GROUP BY bf.amount;
 SELECT *
 FROM customer_actions 
 WHERE id = 1;
+
+SELECT DISTINCT b.id
+FROM budgets b
+JOIN budget_forecasts bf ON b.id = bf.budget_id
+WHERE b.period_id = 1 AND b.department_id = 3 AND bf.category = 'Dépense'
+LIMIT 1;
+
+SELECT COUNT(*) 
+FROM budget_realizations 
+WHERE budget_id = 1 
+AND category = 'Dépense' 
+AND type = 'Pub pizza 4 fromage'
+AND period_id = 1
+
+SELECT COUNT(b.id)
+FROM budgets b
+JOIN budget_forecasts bf ON b.id = bf.budget_id
+WHERE b.period_id = 1 AND b.department_id = 3 AND bf.category = 'Dépense' AND b.id = 2 AND b.status = 1

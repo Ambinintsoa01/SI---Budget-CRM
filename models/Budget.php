@@ -73,16 +73,15 @@ class Budget
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
-    public function getBudgetByPeriodDepartmentCategory($periodId, $departmentId, $category)
+    public function getBudgetByPeriodDepartmentCategory($periodId, $departmentId, $category, $budgetId)
     {
         $stmt = $this->db->prepare("
-            SELECT DISTINCT b.id
+            SELECT COUNT(b.id)
             FROM budgets b
             JOIN budget_forecasts bf ON b.id = bf.budget_id
-            WHERE b.period_id = ? AND b.department_id = ? AND bf.category = ?
-            LIMIT 1
+            WHERE b.period_id = ? AND b.department_id = ? AND bf.category = ? AND b.id = ? AND b.status = 1
         ");
-        $stmt->execute([$periodId, $departmentId, $category]);
+        $stmt->execute([$periodId, $departmentId, $category, $budgetId]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
@@ -139,76 +138,6 @@ class Budget
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public function getRemainingBudgets($periodId, $departmentId, $excludeCategory)
-    {
-        try {
-            $sql = "
-                SELECT 
-                    b.id AS budget_id,
-                    bf.id AS forecast_id,
-                    bf.category,
-                    bf.amount - COALESCE(SUM(br.amount), 0) AS remaining_amount
-                FROM budgets b
-                INNER JOIN budget_forecasts bf ON b.id = bf.budget_id
-                LEFT JOIN budget_realizations br ON b.id = br.budget_id 
-                    AND bf.category = br.category 
-                    AND bf.type = br.type
-                WHERE 
-                    b.period_id = ? 
-                    AND b.department_id = ? 
-                    AND bf.category != ?
-                    AND b.status = 1 -- Budget validé
-                GROUP BY 
-                    b.id, 
-                    bf.id, 
-                    bf.category, 
-                    bf.amount
-                HAVING 
-                    remaining_amount > 0
-            ";
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute([$periodId, $departmentId, $excludeCategory]);
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            error_log("Erreur lors de la récupération des budgets restants: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    public function getRemainingAmount($budgetId, $category, $type) {
-        try {
-            $sql = "
-                SELECT 
-                    bf.amount - COALESCE(SUM(br.amount), 0) AS remaining_amount
-                FROM budget_forecasts bf
-                LEFT JOIN budget_realizations br ON bf.budget_id = br.budget_id 
-                    AND bf.category = br.category 
-                    AND bf.type = br.type
-                WHERE bf.budget_id = ? AND bf.category = ? AND bf.type = ?
-                GROUP BY bf.amount
-            ";
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute([$budgetId, $category, $type]);
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            return $result ? $result['remaining_amount'] : 0;
-        } catch (PDOException $e) {
-            error_log("Erreur lors du calcul du montant restant: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    public function updateBudgetAmount($budgetId, $amountToUse)
-    {
-        try {
-            $sql = "UPDATE budget_forecasts SET amount = amount - ? WHERE id = ?";
-            $stmt = $this->db->prepare($sql);
-            return $stmt->execute([$amountToUse, $budgetId]);
-        } catch (PDOException $e) {
-            error_log("Erreur lors de la mise à jour du budget: " . $e->getMessage());
-            return false;
-        }
-    }
-
     public function checkRealizationExists($budgetId, $category, $type, $periodId)
     {
         try {
@@ -232,6 +161,51 @@ class Budget
             error_log("Erreur lors de la vérification de l'existence de la réalisation : " . $e->getMessage());
             return false;
         }
+    }
+
+    // Récupérer une prévision par budget_id, catégorie, type et période
+    public function getForecastByBudgetCategoryType($budgetId, $category, $type, $periodId)
+    {
+        $query = "SELECT * FROM budget_forecasts 
+              WHERE budget_id = ? AND category = ? AND type = ? AND period_id = ?";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$budgetId, $category, $type, $periodId]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    // Calculer la somme des prévisions pour une catégorie dans une période
+    public function getTotalForecastByCategory($periodId, $departmentId, $category)
+    {
+        $query = "SELECT SUM(bf.amount) as total 
+              FROM budget_forecasts bf 
+              JOIN budgets b ON bf.budget_id = b.id 
+              WHERE bf.period_id = ? AND b.department_id = ? AND bf.category = ?";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$periodId, $departmentId, $category]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result['total'] ?? 0;
+    }
+
+    // Calculer la somme des réalisations pour une catégorie dans une période
+    public function getTotalRealizationByCategory($periodId, $departmentId, $category)
+    {
+        $query = "SELECT SUM(br.amount) as total 
+              FROM budget_realizations br 
+              JOIN budgets b ON br.budget_id = b.id 
+              WHERE br.period_id = ? AND b.department_id = ? AND br.category = ?";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$periodId, $departmentId, $category]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result['total'] ?? 0;
+    }
+
+    // Supprimer une prévision pour un budget_id, catégorie, type et période
+    public function deleteForecast($budgetId, $category, $type, $periodId)
+    {
+        $query = "DELETE FROM budget_forecasts 
+              WHERE budget_id = ? AND category = ? AND type = ? AND period_id = ?";
+        $stmt = $this->db->prepare($query);
+        return $stmt->execute([$budgetId, $category, $type, $periodId]);
     }
 
     function getBudgetsDetailsByPeriod($departmentId = null)

@@ -131,10 +131,17 @@ if (isset($_POST['add_realisation'])) {
 
     $success = true;
     foreach ($_POST['categories'] as $category) {
+        // Valider que budget_id est un entier
+        if (!isset($category['budget_id']) || !is_numeric($category['budget_id'])) {
+            $_SESSION['error'] = "Identifiant de budget invalide pour la catégorie {$category['category']}.";
+            $success = false;
+            break;
+        }
+
         // Vérifier que le budget_id existe et correspond à la catégorie
-        $budgetData = $budget->getBudgetByPeriodDepartmentCategory($periodId, $departmentId, $category['category']);
-        if (!$budgetData || $budgetData['id'] != $category['budget_id']) {
-            $_SESSION['error'] = "Budget invalide pour la catégorie {$category['category']}.";
+        $budgetData = $budget->getBudgetByPeriodDepartmentCategory($periodId, $departmentId, $category['category'], $category['budget_id']);
+        if (!$budgetData) {
+            $_SESSION['error'] = "Budget invalide pour la catégorie {$category['category']} ou identifiant de budget incorrect.";
             $success = false;
             break;
         }
@@ -144,6 +151,58 @@ if (isset($_POST['add_realisation'])) {
             $_SESSION['error'] = "Une réalisation existe déjà pour la catégorie {$category['category']}, type {$category['type']} et période sélectionnée.";
             $success = false;
             break;
+        }
+
+        // Vérification spécifique pour la catégorie "Dépense"
+        if ($category['category'] === 'Dépense') {
+            // Récupérer la prévision pour la catégorie, type, budget et période
+            $forecast = $budget->getForecastByBudgetCategoryType($category['budget_id'], $category['category'], $category['type'], $periodId);
+            if ($forecast && $category['amount'] > $forecast['amount']) {
+                // Le montant de la réalisation dépasse la prévision
+                // Calculer le reste total des dépenses pour la période
+                $totalForecast = $budget->getTotalForecastByCategory($periodId, $departmentId, 'Dépense');
+                $totalRealization = $budget->getTotalRealizationByCategory($periodId, $departmentId, 'Dépense');
+                $remainingBudget = $totalForecast - $totalRealization;
+
+                if ($remainingBudget >= $category['amount']) {
+                    // Le reste total est suffisant, on peut insérer la réalisation
+                } else {
+                    // Le reste total est insuffisant, créer un nouveau budget et une nouvelle prévision
+                    $initialBalance = 0; // À ajuster selon votre logique
+                    $year = date('Y', strtotime($date));
+                    $newBudgetId = $budget->createBudget($departmentId, $initialBalance, $year, $periodId);
+
+                    if ($newBudgetId !== false) {
+                        // Ajouter la nouvelle prévision avec le montant de la réalisation
+                        if (!$budget->addForecast(
+                            $newBudgetId,
+                            $category['category'],
+                            $category['type'],
+                            $category['amount'],
+                            $category['description'] ?? null,
+                            $periodId
+                        )) {
+                            $_SESSION['error'] = "Erreur lors de l'ajout de la nouvelle prévision.";
+                            $success = false;
+                            break;
+                        }
+
+                        // Supprimer l'ancienne prévision pour ce budget_id, catégorie et type
+                        if (!$budget->deleteForecast($category['budget_id'], $category['category'], $category['type'], $periodId)) {
+                            $_SESSION['error'] = "Erreur lors de la suppression de l'ancienne prévision.";
+                            $success = false;
+                            break;
+                        }
+
+                        // Mettre à jour le budget_id pour la réalisation
+                        $category['budget_id'] = $newBudgetId;
+                    } else {
+                        $_SESSION['error'] = "Erreur lors de la création du nouveau budget.";
+                        $success = false;
+                        break;
+                    }
+                }
+            }
         }
 
         // Ajouter la réalisation si aucune ne existe
@@ -167,7 +226,6 @@ if (isset($_POST['add_realisation'])) {
             $success = false;
         }
     }
-
 
     if ($success) {
         $_SESSION['success'] = "Réalisation ajoutée avec succès !";
